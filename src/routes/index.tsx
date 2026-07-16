@@ -16,9 +16,21 @@ import { ShareRow } from "@/components/ShareRow";
 import { Footer } from "@/components/Footer";
 import { Loading } from "@/components/Loading";
 import { Toast } from "@/components/Toast";
+import { generatePixPayload } from "@/lib/pix";
 
-import { fetchNumbers, reserveNumbers, confirmPayment, getStats } from "@/services/raffleService";
-import { PRICE_PER_NUMBER, RESERVATION_MINUTES, type Participant, type RaffleNumber } from "@/types/raffle";
+import {
+  fetchNumbers,
+  reserveNumbers,
+  confirmPayment,
+  getStats,
+  expireReservation,
+} from "@/services/raffleService";
+import {
+  PRICE_PER_NUMBER,
+  RESERVATION_MINUTES,
+  type Participant,
+  type RaffleNumber,
+} from "@/types/raffle";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -37,10 +49,12 @@ function Index() {
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchNumbers().then(setNumbers);
+    fetchNumbers().then(setNumbers).catch(console.error);
   }, []);
 
-  const stats = numbers ? getStats(numbers) : { sold: 0, reserved: 0, available: 0, raised: 0, total: 100 };
+  const stats = numbers
+    ? getStats(numbers)
+    : { sold: 0, reserved: 0, available: 0, raised: 0, total: 100 };
 
   const selectedArr = useMemo(() => Array.from(selected).sort((a, b) => a - b), [selected]);
   const total = selectedArr.length * PRICE_PER_NUMBER;
@@ -54,7 +68,8 @@ function Index() {
     });
   };
 
-  const scrollToGrid = () => gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToGrid = () =>
+    gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const continueToForm = () => {
     if (selectedArr.length === 0) return;
@@ -70,6 +85,8 @@ function Index() {
       setExpiresAt(Date.now() + RESERVATION_MINUTES * 60 * 1000);
       setStep("payment");
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Erro ao reservar números. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -83,6 +100,8 @@ function Index() {
       setStep("done");
       setToast("Recebemos! Confirmação em breve.");
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Erro ao confirmar pagamento.");
     } finally {
       setLoading(false);
     }
@@ -93,16 +112,30 @@ function Index() {
     setParticipant(null);
     setExpiresAt(null);
     setStep("select");
+    // Atualiza os números para refletir as mudanças mais recentes do banco de dados
+    fetchNumbers().then(setNumbers).catch(console.error);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onExpire = async () => {
+    if (participant) {
+      try {
+        await expireReservation(participant.id);
+        setToast("Sua reserva expirou por falta de pagamento.");
+      } catch (e) {
+        console.error("Erro ao expirar reserva:", e);
+      }
+    }
+    backHome();
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Toast message={toast} onClose={() => setToast(null)} />
-      <Navbar />
 
       {step === "select" && (
         <>
+          <Navbar />
           <Hero onCta={scrollToGrid} />
           <InformationCards />
           <StoryCard />
@@ -154,7 +187,10 @@ function Index() {
             </p>
           </div>
           <ParticipantForm onSubmit={submitForm} loading={loading} />
-          <button onClick={() => setStep("select")} className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <button
+            onClick={() => setStep("select")}
+            className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
             <ArrowLeft className="h-4 w-4" /> Voltar aos números
           </button>
         </FlowContainer>
@@ -163,12 +199,21 @@ function Index() {
       {step === "payment" && participant && expiresAt && (
         <FlowContainer title="Pagamento" subtitle="Finalize com o Pix abaixo.">
           <div className="mb-4 flex justify-center">
-            <ReservationTimer expiresAt={expiresAt} onExpire={backHome} />
+            <ReservationTimer expiresAt={expiresAt} onExpire={onExpire} />
           </div>
-          <PixCard amount={total} code={`00020126360014BR.GOV.BCB.PIX...RIFA-MONICA-${participant.id}`} />
+          <PixCard 
+            amount={total} 
+            code={generatePixPayload(
+              "+5527996626640",         // Coloque sua Chave PIX real aqui! (Se for celular: +5511999999999)
+              "RAFAEL RODRIGUES FRAGA",          // Nome exato que está na conta bancária (sem acentos preferencialmente)
+              "VITORIA",                  // Cidade da conta
+              total,                        // Valor total (já está automático)
+              `RIFAMONICA` // Gera um ID único pra transação
+            )} 
+          />
           <p className="mt-4 rounded-xl bg-muted p-4 text-center text-xs text-muted-foreground">
             Seus números serão confirmados após a verificação do pagamento.
-          </p>
+          </p>  
           <button
             onClick={reportPayment}
             disabled={loading}
@@ -180,7 +225,10 @@ function Index() {
       )}
 
       {step === "done" && participant && (
-        <FlowContainer title="Obrigada de coração!" subtitle="Você acabou de fazer parte dessa corrente de amor.">
+        <FlowContainer
+          title="Obrigada de coração!"
+          subtitle="Você acabou de fazer parte dessa corrente de amor."
+        >
           <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-[var(--shadow-card)]">
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-blush">
               <CheckCircle2 className="h-8 w-8 text-primary" />
@@ -189,7 +237,10 @@ function Index() {
               {participant.name.split(" ")[0]}, recebemos seu pedido!
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Números: <span className="font-semibold text-foreground">{selectedArr.map((n) => String(n).padStart(2, "0")).join(", ")}</span>
+              Números:{" "}
+              <span className="font-semibold text-foreground">
+                {selectedArr.map((n) => String(n).padStart(2, "0")).join(", ")}
+              </span>
             </p>
             <div className="mt-5 inline-flex rounded-full bg-yellow-100 px-4 py-1.5 text-xs font-semibold text-yellow-800">
               Aguardando confirmação do pagamento
@@ -197,11 +248,14 @@ function Index() {
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button onClick={backHome} className="flex-1 rounded-full border border-input bg-background px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent">
+            <button
+              onClick={backHome}
+              className="flex-1 rounded-full border border-input bg-background px-5 py-3 text-sm font-semibold text-foreground hover:bg-accent"
+            >
               Voltar ao início
             </button>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent("Oi! Acabei de participar da rifa da Mônica.")}`}
+              href={`https://wa.me/5527996626640?text=${encodeURIComponent("Oi! Acabei de participar da rifa da Mônica e já fiz o pagamento.")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:brightness-105"
@@ -217,7 +271,15 @@ function Index() {
   );
 }
 
-function FlowContainer({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function FlowContainer({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="mx-auto max-w-xl px-4 py-14 sm:px-6">
       <div className="mb-8 text-center">
@@ -226,7 +288,12 @@ function FlowContainer({ title, subtitle, children }: { title: string; subtitle:
       </div>
       {children}
       <div className="mt-8 text-center">
-        <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">← Página inicial</Link>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          ← Página inicial
+        </button>
       </div>
     </section>
   );
