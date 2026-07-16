@@ -1,10 +1,12 @@
-export type NumberStatus = "available" | "reserved" | "sold";
+export type NumberStatus = "available" | "reserved" | "pending" | "paid" | "blocked";
 
 export interface RaffleNumber {
-  value: number;
+  number: number;
   status: NumberStatus;
-  participantId?: string;
+  participantId?: string | null;
 }
+
+export type ParticipantStatus = "reserved" | "pending" | "paid" | "cancelled";
 
 export interface Participant {
   id: string;
@@ -12,7 +14,7 @@ export interface Participant {
   whatsapp: string;
   email?: string;
   numbers: number[];
-  status: "reserved" | "pending" | "paid";
+  status: ParticipantStatus;
   createdAt: number;
 }
 
