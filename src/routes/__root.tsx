@@ -84,6 +84,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Uma linda Festa na Caixa te espera. Cada número ajuda a Mônica a cuidar dos olhos." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: "https://rifa-monica.vercel.app/og-image.jpeg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
