@@ -11,9 +11,9 @@ export function NumberGrid({ numbers, selected, onToggle }: Props) {
   return (
     <div className="grid grid-cols-5 gap-2 sm:grid-cols-8 sm:gap-3 md:grid-cols-10">
       {numbers.map((n) => {
-        const isSelected = selected.has(n.value);
-        const isSold = n.status === "sold" || n.status === "reserved";
-        const label = String(n.value).padStart(2, "0");
+        const isSelected = selected.has(n.number);
+        const isSold = n.status === "paid" || n.status === "reserved";
+        const label = String(n.number).padStart(2, "0");
         const base = "aspect-square rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 flex items-center justify-center select-none";
         let cls = "";
         if (isSold) {
@@ -25,12 +25,12 @@ export function NumberGrid({ numbers, selected, onToggle }: Props) {
         }
         return (
           <button
-            key={n.value}
+            key={n.number}
             type="button"
             disabled={isSold}
             aria-pressed={isSelected}
             aria-label={`Número ${label}${isSold ? " indisponível" : ""}`}
-            onClick={() => onToggle(n.value)}
+            onClick={() => onToggle(n.number)}
             className={`${base} ${cls}`}
           >
             {isSold ? <Lock className="h-4 w-4" /> : label}

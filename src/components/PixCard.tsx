@@ -1,8 +1,12 @@
-import { Check, Copy, QrCode } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
 export function PixCard({ amount, code }: { amount: number; code: string }) {
   const [copied, setCopied] = useState(false);
+  
+  // API gratuita que transforma o texto do Pix em imagem de QR Code
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(code)}`;
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -10,6 +14,7 @@ export function PixCard({ amount, code }: { amount: number; code: string }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {}
   };
+
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-card)]">
       <div className="text-center">
@@ -18,10 +23,15 @@ export function PixCard({ amount, code }: { amount: number; code: string }) {
           R$ {amount.toFixed(2).replace(".", ",")}
         </p>
       </div>
-      <div className="mx-auto mt-6 grid h-52 w-52 place-items-center rounded-2xl bg-gradient-to-br from-blush to-white ring-1 ring-border">
-        <QrCode className="h-32 w-32 text-primary/70" strokeWidth={1.2} />
+      
+      <div className="mx-auto mt-6 grid h-52 w-52 overflow-hidden place-items-center rounded-2xl bg-white ring-1 ring-border">
+        <img 
+          src={qrCodeUrl} 
+          alt="QR Code do Pix" 
+          className="h-full w-full object-contain p-2"
+        />
       </div>
-      <p className="mt-3 text-center text-xs text-muted-foreground">QR Code Pix (demonstração)</p>
+      <p className="mt-3 text-center text-xs text-muted-foreground">Abra o app do seu banco e escaneie o código</p>
 
       <div className="mt-6">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Pix Copia e Cola</p>
