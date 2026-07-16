@@ -4,6 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+  /* Garante que todos os botões e links tenham o cursor de pointer */
+  button:not(:disabled), 
+  a:not([aria-disabled="true"]) {
+    @apply cursor-pointer;
+  }
+
+  /* Garante que os botões desabilitados tenham o cursor de bloqueado */
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
