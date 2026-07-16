@@ -260,7 +260,7 @@ function Index() {
               rel="noopener noreferrer"
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:brightness-105"
             >
-              <MessageCircle className="h-4 w-4" /> Falar com a organização
+              <MessageCircle className="h-4 w-4" />Enviar comprovante
             </a>
           </div>
         </FlowContainer>
