@@ -7,7 +7,6 @@ export function ShareRow() {
   const text = "Participe da Rifa Solidária pela Mônica 💖";
   const items = [
     { label: "WhatsApp", icon: MessageCircle, href: `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}` },
-    { label: "Facebook", icon: Facebook, href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
     { label: "Instagram", icon: Instagram, href: "https://instagram.com" },
   ];
   const copy = async () => {
