@@ -12,13 +12,11 @@ import {
 import type { Participant, RaffleNumber } from "@/types/raffle";
 import { Toast } from "@/components/Toast";
 import { Loading } from "@/components/Loading";
+import { Modal } from "@/components/Modal";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [
-      { title: "Administração — Rifa da Mônica" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "Administração — Rifa da Mônica" }, { name: "robots", content: "noindex" }],
   }),
   component: AdminPage,
 });
@@ -33,6 +31,9 @@ function AdminPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [drawModalOpen, setDrawModalOpen] = useState(false);
+  const [rollingNumbers, setRollingNumbers] = useState<number[]>([]);
+  const [winner, setWinner] = useState<{ name: string; number: number } | null>(null);
 
   const reload = async () => {
     const [n, p] = await Promise.all([fetchNumbers(), fetchParticipants()]);
@@ -44,13 +45,39 @@ function AdminPage() {
     reload();
   }, []);
 
-  const stats = numbers ? getStats(numbers) : { sold: 0, reserved: 0, available: 0, raised: 0, total: 100 };
+  const paidNumbers = useMemo(
+    () => (numbers ? numbers.filter((n) => n.status === "paid").map((n) => n.number) : []),
+    [numbers],
+  );
+
+  useEffect(() => {
+    if (!drawing || paidNumbers.length === 0) return;
+
+    const interval = window.setInterval(() => {
+      const nextRoll = Array.from({ length: 6 }, () => {
+        const randomIndex = Math.floor(Math.random() * paidNumbers.length);
+        return paidNumbers[randomIndex];
+      });
+      setRollingNumbers(nextRoll);
+    }, 180);
+
+    return () => window.clearInterval(interval);
+  }, [drawing, paidNumbers]);
+
+  const stats = numbers
+    ? getStats(numbers)
+    : { sold: 0, reserved: 0, available: 0, raised: 0, total: 100 };
 
   const filtered = useMemo(() => {
     if (!participants) return [];
     return participants.filter((p) => {
       if (filter !== "all" && p.status !== filter) return false;
-      if (query && !p.name.toLowerCase().includes(query.toLowerCase()) && !p.whatsapp.includes(query)) return false;
+      if (
+        query &&
+        !p.name.toLowerCase().includes(query.toLowerCase()) &&
+        !p.whatsapp.includes(query)
+      )
+        return false;
       return true;
     });
   }, [participants, query, filter]);
@@ -87,39 +114,130 @@ function AdminPage() {
     const text = encodeURIComponent(
       `Oi ${p.name.split(" ")[0]}! Passando para lembrar do pagamento dos números ${p.numbers
         .map((n) => String(n).padStart(2, "0"))
-        .join(", ")} da rifa da Mônica 💛`
+        .join(", ")} da rifa da Mônica 💛`,
     );
     window.open(`https://wa.me/55${digits}?text=${text}`, "_blank");
   };
 
-  const handleDraw = async () => {
-    if (!confirm("Sortear o ganhador agora entre todos os números pagos?")) return;
+  const handleDraw = () => {
+    setDrawModalOpen(true);
+  };
+
+  const confirmDraw = async () => {
+    setDrawModalOpen(false);
+    setWinner(null);
     setDrawing(true);
+
     try {
       const result = await drawWinner();
       if (!result) {
         setToast("Ainda não há números pagos para sortear.");
+        setDrawing(false);
         return;
       }
-      setToast(`🎉 Ganhador: ${result.participant.name} — número ${String(result.number).padStart(2, "0")}!`);
+
+      window.setTimeout(() => {
+        setWinner({
+          name: result.participant.name,
+          number: result.number,
+        });
+        setDrawing(false);
+      }, 1800);
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Erro ao sortear.");
-    } finally {
       setDrawing(false);
     }
+  };
+
+  const closeDrawModal = () => {
+    if (drawing) return;
+    setDrawModalOpen(false);
+    setWinner(null);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Toast message={toast} onClose={() => setToast(null)} />
 
+      {(drawModalOpen || drawing || winner) && (
+        <Modal
+          open={true}
+          onClose={closeDrawModal}
+          title={winner ? "Ganhador sorteado" : drawing ? "Sorteando..." : "Sortear ganhador"}
+        >
+          {drawModalOpen ? (
+            <div className="space-y-5">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Isso vai sortear um vencedor entre todos os participantes com pagamento confirmado.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeDrawModal}
+                  className="rounded-full border border-input bg-background px-4 py-2 text-sm font-semibold text-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDraw}
+                  className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                >
+                  Sortear agora
+                </button>
+              </div>
+            </div>
+          ) : drawing ? (
+            <div className="space-y-5 text-center">
+              <div className="flex items-center justify-center gap-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="grid h-16 w-16 animate-[spin_0.6s_linear_infinite] place-items-center rounded-2xl border border-primary/20 bg-linear-to-br from-primary/10 to-blush text-xl font-black text-primary shadow-[0_0_20px_rgba(190,76,56,0.2)]"
+                  >
+                    {rollingNumbers[index] ?? "?"}
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground">Aguardando os números baterem...</p>
+            </div>
+          ) : winner ? (
+            <div className="space-y-5 text-center">
+              <div className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-primary text-3xl font-black text-primary-foreground shadow-[0_0_30px_rgba(190,76,56,0.35)] animate-pop-in">
+                {String(winner.number).padStart(2, "0")}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Vencedor
+                </p>
+                <h3 className="mt-2 font-display text-3xl font-semibold text-foreground">
+                  {winner.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeDrawModal}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Fechar
+              </button>
+            </div>
+          ) : null}
+        </Modal>
+      )}
+
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Painel</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Painel
+            </p>
             <h1 className="font-display text-2xl font-semibold">Administração da Rifa</h1>
           </div>
-          <Link to="/" className="rounded-full border border-input bg-background px-4 py-2 text-sm font-semibold hover:bg-accent">
+          <Link
+            to="/"
+            className="rounded-full border border-input bg-background px-4 py-2 text-sm font-semibold hover:bg-accent"
+          >
             Voltar ao site
           </Link>
         </div>
@@ -130,7 +248,11 @@ function AdminPage() {
           <Stat label="Vendidos" value={stats.sold} tone="primary" />
           <Stat label="Reservados" value={stats.reserved} tone="warning" />
           <Stat label="Disponíveis" value={stats.available} tone="muted" />
-          <Stat label="Arrecadado" value={`R$ ${stats.raised.toFixed(2).replace(".", ",")}`} tone="primary" />
+          <Stat
+            label="Arrecadado"
+            value={`R$ ${stats.raised.toFixed(2).replace(".", ",")}`}
+            tone="primary"
+          />
         </section>
 
         <section className="mt-8 rounded-2xl border border-border bg-card p-4 sm:p-6 shadow-[var(--shadow-card)]">
@@ -150,10 +272,20 @@ function AdminPage() {
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                    filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"
+                    filter === f
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
                   }`}
                 >
-                  {f === "all" ? "Todos" : f === "paid" ? "Pago" : f === "pending" ? "Pendente" : f === "reserved" ? "Reservado" : "Cancelado"}
+                  {f === "all"
+                    ? "Todos"
+                    : f === "paid"
+                      ? "Pago"
+                      : f === "pending"
+                        ? "Pendente"
+                        : f === "reserved"
+                          ? "Reservado"
+                          : "Cancelado"}
                 </button>
               ))}
               <button
@@ -188,7 +320,10 @@ function AdminPage() {
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap gap-1">
                           {p.numbers.map((n) => (
-                            <span key={n} className="rounded-md bg-blush px-1.5 py-0.5 text-xs font-semibold text-primary">
+                            <span
+                              key={n}
+                              className="rounded-md bg-blush px-1.5 py-0.5 text-xs font-semibold text-primary"
+                            >
                               {String(n).padStart(2, "0")}
                             </span>
                           ))}
@@ -202,7 +337,9 @@ function AdminPage() {
                           <IconBtn
                             title="Confirmar pagamento"
                             icon={CheckCircle2}
-                            disabled={busyId === p.id || p.status === "paid" || p.status === "cancelled"}
+                            disabled={
+                              busyId === p.id || p.status === "paid" || p.status === "cancelled"
+                            }
                             onClick={() => handleConfirm(p)}
                           />
                           <IconBtn
@@ -238,11 +375,22 @@ function AdminPage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string | number; tone: "primary" | "warning" | "muted" }) {
-  const toneCls = tone === "primary" ? "text-primary" : tone === "warning" ? "text-amber-600" : "text-foreground";
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone: "primary" | "warning" | "muted";
+}) {
+  const toneCls =
+    tone === "primary" ? "text-primary" : tone === "warning" ? "text-amber-600" : "text-foreground";
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <p className={`mt-1 font-display text-3xl font-semibold ${toneCls}`}>{value}</p>
     </div>
   );
@@ -256,7 +404,11 @@ function StatusBadge({ status }: { status: Participant["status"] }) {
     cancelled: { label: "Cancelado", cls: "bg-muted text-muted-foreground" },
   } as const;
   const it = map[status];
-  return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${it.cls}`}>{it.label}</span>;
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${it.cls}`}>
+      {it.label}
+    </span>
+  );
 }
 
 function IconBtn({
